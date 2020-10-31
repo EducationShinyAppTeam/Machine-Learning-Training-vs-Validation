@@ -5,6 +5,10 @@
 
 #predict.lqs, predict.mca, predict.qda, predict.profile.glm
 
+#The core to this concept is that the less data in testing the more variance in performance statistic
+#     Then less intrainging data the parameter estimates have greater variance. 
+#https://stackoverflow.com/questions/13610074/is-there-a-rule-of-thumb-for-how-to-divide-a-dataset-into-training-and-validation#:~:text=Roughly%2017.7%25%20should%20be%20reserved,validation%20and%2082.3%25%20for%20training.&text=Well%20you%20should%20think%20about,tell%20that%20model%20works%20fine.
+
 library(shiny)
 library(shinydashboard)
 library(shinyBS)
@@ -22,6 +26,7 @@ library(glmnet)
 library(lars)
 library(DT)
 library(xgboost)
+data(iris)
 # App Meta Data----------------------------------------------------------------
 APP_TITLE  <<- "[Base App for Fill in the Blank]"
 APP_DESCP  <<- paste(
@@ -31,8 +36,24 @@ APP_DESCP  <<- paste(
 # End App Meta Data------------------------------------------------------------
 
 # Load additional dependencies and setup functions
-# source("global.R")
-#profvis({
+basePerformPlot <- ggplot(
+  data = data.frame(x = seq(from = 0.5, to = 1), y = seq(from = 0, to = 1)),
+  mapping = aes(x = x, y = y)
+) +
+  #geom_abline(slope = 1, intercept = 0) +
+  theme_bw() +
+  xlab("Proportion in Training Set") +
+  ylab("Accuracy, (Percent for categorical, quantitative the MSOS of the difference") +
+  labs(title = "Your Performance") +
+  theme(
+    text = element_text(size = 18)
+  ) +
+  scale_x_continuous(limits = c(.5, 1), expand = expansion(mult = 0.01, add = 0)) +
+  scale_y_continuous(limits = c(0, .2), expand = expansion(mult = 0.01, add = 0))
+
+#100 for categorical sample, .2 for quantitative example
+
+
 {
 # Define UI for App
 ui <- list(
@@ -84,6 +105,10 @@ ui <- list(
           withMathJax(),
           h4('Click the link to open page with basic machine learning information'),
           h4('Please refer to the', a(href = 'https://towardsdatascience.com/workflow-of-a-machine-learning-project-ec1dba419b94', 'Machine Learning Cheatsheet', target="_blank"), 'for all the information needed.'),
+          p('In this app you will study how the accuracy of a machine learning algorithm
+            is affected by the percent of the cases in the training dataset vs the testing dataset.
+            As you go pay attention to how the accuracy of the data along with the standard 
+            deviation increases and decreases and to what amount')
          ),
         
         #### Set up the Overview Page
@@ -112,16 +137,16 @@ ui <- list(
           br(),br(),
           h2("Acknowledgements"),
           p(
-            "This version of the app was developed and coded by Ethan Wright",
+            "This app was developed and coded by Ethan Wright",
             br(),
-            "We would like to extend a special thanks to the Shiny Program
+            "I would like to extend a special thanks to the Shiny Program
             Students.",
             br(),br(),br(),
             div(class = "updated", "Last Update: 6/15/2020 by EJW")
           )
         ),
         
-        #### Fill in the blank
+        
         tabItem(
           tabName = "expl",
           withMathJax(),
@@ -129,51 +154,79 @@ ui <- list(
           t("The normal amount of training data set vs validation data set is"),
           t("80% training and 20% test set"),
           br(), br(),
-          selectInput(inputId = 'theDataSet', label = 'Dataset', choices = list('Iris','Palmer Penguins', 'Marketing', 'Heart Disease'), selected = 'Iris'),
-          selectInput(inputId = 'theVariable', label = 'Variable to predict', choices = list('Species', 'Sepal.Length', 'Sepal.Width', 'Petal.Length', 'Petal.Width'), selected = 'Species'),
-          #This stores and hides the dataset and the extra information the user may be interested in. 
-          box(
-            title = strong("Output of the Graph and basic information on it"),
-            status = "primary",
-            collapsible = TRUE,
-            collapsed = TRUE,
-            width = '100%',
-            textOutput("dataTableInfo"), #Gives basic info on dataset
-            box(
-              title = strong("Variable Details"),
-              status = "primary",
-              collapsible = TRUE,
-              collapsed = TRUE,
-              width = "100%",
-              uiOutput("dataTableVariables")
-            ),
-            DT::dataTableOutput("dataTable") #Shows first 10 cases in table
+          fluidRow(
+            column(2,
+                   selectInput(inputId = 'theDataSet', label = 'Dataset', choices = list('Iris','Palmer Penguins', 'Marketing', 'Heart Disease'), selected = 'Iris'),
+                   ),
+            column(4,
+                   textOutput("dataTableInfo"), #Gives basic info on dataset
+                   box(
+                     title = strong("Display Dataset"),
+                     status = "primary",
+                     collapsible = TRUE,
+                     collapsed = TRUE,
+                     width = '100%',
+                     DT::dataTableOutput("dataTable") #Shows first 10 cases in table
+                   )
+                   ),
+            column(2,
+                   selectInput(inputId = 'theVariable', label = 'Variable to predict', choices = list('Species', 'Sepal.Length', 'Sepal.Width', 'Petal.Length', 'Petal.Width'), selected = 'Species'),
+                   ),
+            column(4,
+                   
+                   uiOutput("dataTableVariables")
+                   
+                  )
+            
           ),
+          
+          #This stores and hides the dataset and the extra information the user may be interested in. 
+          br(),
+          br(),
+          br(),
           selectInput(inputId = 'theMethod', label = 'Method', 
                       choices = list('Linear Discriminant Analysis',
                              'Multiple Linear Regression','Logistic Regression',
                              'Ridge Regression', 'LASSO', 'XGboost'), 
                       selected = 'Linear Discriminant Analysis'),
+          #Ethan 10/1
+          selectInput(inputId = 'repetitions', label = '# of repititions at each value',
+                            choices = list(5,10,20,30,40,50,70,100),
+                            selected = 20),
+          
           fluidRow(
-            column(3,
-                   actionButton('runTest', 'Test Accuracy'),
+            column(4,
+                   #actionButton('runTest', 'Test Accuracy'),
+                   actionButton('newGraphOutput', 'Add Points to Graph'),
                    sliderInput('testingPercent','Percent tester',
-                               min = .01, max = .99, value = .80, step = .01),
-                   textOutput('accuracyResult'),
-                   textOutput('results')),
-            column(9,
-                   actionButton('outputGraph','Output Graph'),
-                   plotOutput('overallPlot'),
-                   plotOutput('consistencyPlot')
+                               min = .5, max = .9, value = .80, step = .1),
+                   textOutput('accuracyResult')),
+                   #textOutput('results')),
+            column(4,
+                   #actionButton('outputGraph','Output Graph'),
+                   #plotOutput('overallPlot')
+                   ),
+            column(4,
+                   #br(),
+                   #plotOutput('consistencyPlot')
                    )
           ),
+          plotOutput(outputId = "newAccuracy", width = "100%")
         ),
         
-        #Long response
+        
         tabItem(
           tabName = "challenge",
           withMathJax(),
           h2(inputId = "Now do it yourself",label = "test"),
+          h3('Observations'),
+          p('Everything is a trade off between accuracy and consistency.
+            The more of the data is used for training the more accurate
+            (unless oversampling occurs) the estimate. More of the data used for
+            testing you will get a result that more accuratetly measures how good 
+            the data algorithm is'),
+          p('If the percent correct is very high you may as well just
+            go with low training and high testing to make sure you get an accurate result')
         )
       )
     )
@@ -186,8 +239,18 @@ server <- function(input, output, session) {
   observeEvent(input$go1, {
     updateTabItems(session, "tabs", "expl")
   })
+  
+  tracking <- reactiveValues()
+  tracking$DT <- data.frame(
+    percentTraining = numeric(),
+    accuracyValue = numeric()
+  )
+  
 
+  
+  
 ####### This changes what variables can be picked after the dataset selected changes
+  #----Dataset Chosen, observeEvent(input$theDataSet), ----
   observeEvent(input$theDataSet, {
     if(input$theDataSet == "Iris")
     {
@@ -195,7 +258,16 @@ server <- function(input, output, session) {
        iris
       })
       output$dataTableInfo <- renderText({
-        "Classic Machine Learning Data Set primarily to predict the species described by the measurments"
+        "Machine learning dataset containing various measurments of different species of iris flowers"
+      })
+      output$dataTableVariables <- renderText({
+        "
+          </li><li><b>Sepal.Length: Length of the sepal in cm</b></li><li>
+          Sepal.Width: Length of the sepal in cm</li><li>
+          Petal.Length: Length of the sepal in cm</li><li>
+          Petal.Width: Length of the sepal in cm</li><li>
+          <b>Species: Either Setosa, Versicolour or Virginica</b>
+        "
       })
       updateSelectInput(session, inputId = "theVariable", label = NULL,
                         choices = list('Sepal.Length', 'Species'))
@@ -207,6 +279,12 @@ server <- function(input, output, session) {
       output$dataTableInfo <- renderText({
         "Machine learning algorithm to try and learn the type of penguins"
       })
+      output$dataTableVariables <- renderText({
+        "<ul><li>Youtube advertising spent in thousands of dollars</li><li>
+          Facebook advertising spent in thousands of dollars</li><li>
+          Newspaper advertising spent in thousands of dollars</li><li>
+          Total sales made in thousands of units</li><li>"
+      })
       updateSelectInput(session, inputId = "theVariable", label = NULL,
                         choices = list('species','island', 'body_mass_g', 'sex'))
     }
@@ -217,6 +295,12 @@ server <- function(input, output, session) {
       })
       output$dataTableInfo <- renderText({
         "Simple dataset to predict continous values most notably the overall sales"
+      })
+      output$dataTableVariables <- renderText({
+        "<ul><li>Youtube advertising spent in thousands of dollars</li><li>
+          Facebook advertising spent in thousands of dollars</li><li>
+          Newspaper advertising spent in thousands of dollars</li><li>
+          Total sales made in thousands of units</li><li>"
       })
       updateSelectInput(session, inputId = "theVariable", label = NULL,
                         choices = list('sales','youtube'))
@@ -258,6 +342,7 @@ server <- function(input, output, session) {
   })
   
 ####### This changes what methods can be used after the variable selected changes
+  #----Variable Selected changes observeEvent(input$theVariable), changes methods available----
   observeEvent(input$theVariable, { 
     if(input$theVariable == "Sepal.Length")
     {
@@ -311,24 +396,24 @@ server <- function(input, output, session) {
     }
     else
     {
-      print("test")
+      #print("test")
     }
   })
 
   #Input: data set, the testingPercent (average .8), method used
   #output: returns the percent accuracy of the model. 
   #percent <- calculateAccuracy(dataset, input$testingPercent, input$theMethod, predictor, predictionVariable)
+  #----calculateAccuracy()----
   calculateAccuracy <- function(theDataSet, testingPercent, method, predictor, predictionVariable) #predictor replaces theDataSet$Species, preictionVariable is just 'variableString'
   {
-    #print(predictor)
-    validation_index <- createDataPartition(predictor, p = testingPercent, list = FALSE) #p usually input$testingPercent
+    validation_index <- createDataPartition(y = predictor, p = testingPercent, list = FALSE) #p usually input$testingPercent
     
     
     #dataset <- dataset(na.action=na.exclude)
     validation <- theDataSet[-validation_index,]
 
     trainingDataset <- theDataSet[validation_index,]
-    print(trainingDataset)
+    
     sapply(trainingDataset,class)
 
 
@@ -349,12 +434,12 @@ server <- function(input, output, session) {
       fit.lr <- glm(eval(parse(text = paste(predictionVariable, '~.'))), data = trainingDataset, family = "binomial")
       probabilities <- predict(fit.lr, validation, type = "response")
       #print(probabilities)
-      if(predictionVariable ==  "sex") #Ethan 8/13
-        finalPredictions <- ifelse(probabilities > 0.5, "female", "male")
+      if(predictionVariable ==  "sex")
+        finalPredictions <- ifelse(probabilities < 0.5, "female", "male")
       else if(predictionVariable == "hd")
         finalPredictions <- ifelse(probabilities > 0.5, "Unhealthy", "Healthy")
       else
-        print(predictionVariable)
+        #print(predictionVariable)
         
       #print(finalPredictions)
       #fit.lr <- glm(hd ~ ., data = trainingDataset, family = "binomial")
@@ -387,7 +472,7 @@ server <- function(input, output, session) {
       best_step <- fit.lars$df[which.min(fit.lars$RSS)]
       # make predictions
       finalPredictions <- predict(fit.lars, data.matrix(validation[,names(trainingDataset) != predictionVariable]), s=best_step, type="fit")$fit
-      print(finalPredictions)
+      
       outputType <- "continuous"
     }
     else #This is for XGboost
@@ -395,13 +480,13 @@ server <- function(input, output, session) {
       #Might be necessary in the future to improve the callebration of the code below
       #   Much of it is found here 
       #   https://www.analyticsvidhya.com/blog/2016/01/xgboost-algorithm-easy-steps/
-     
-      label <- as.integer(iris$Species)-1
-      iris$Species <- NULL
-      train.label <- label[trainingDataset]
-      test.label <- label[validation]
+      species <- iris$Species
+    
       
+      train.label <- as.integer(predictor) - 1
       
+      #print(train.label)
+      #print(class(train.label))
       xgb.train <- xgb.DMatrix(data = trainingDataset, label = train.label)
       xgb.train <- xgb.DMatrix(data = trainingDataset, label = train.label)
       
@@ -476,9 +561,9 @@ server <- function(input, output, session) {
       for(number in finalPredictions)
       {
         count <- count + 1
-        print(number)
-        print("THIS MARKS START OF NEXT SECTION")
-        print(eval(parse(text= paste('validation$',predictionVariable,'[',count,']'))))
+        #print(number)
+        #print("THIS MARKS START OF NEXT SECTION")
+        #print(eval(parse(text= paste('validation$',predictionVariable,'[',count,']'))))
         MSOS = MSOS + ((number - eval(parse(text= paste('validation$',predictionVariable,'[',count,']'))))^2)
         #print(MSOS)
       }
@@ -487,7 +572,7 @@ server <- function(input, output, session) {
       return(MSOS)
     }
   }
-  
+  #----Ouput runTest 1 accuracy function----
   observeEvent(input$runTest,{
     #print('submit detected')
     if(input$theDataSet == 'Iris'){
@@ -538,8 +623,9 @@ server <- function(input, output, session) {
       predictionVariable <- input$theVariable
     }
     else{
-      print('ERROR')
+      #print('ERROR')
     }
+    
     percentCorrect <- calculateAccuracy(dataset, input$testingPercent, input$theMethod, predictor, predictionVariable)
     percentCorrect <- signif(percentCorrect,4) #
     if(input$theMethod == "Linear Discriminant Analysis" || input$theMethod == "Logistic Regression")
@@ -549,11 +635,13 @@ server <- function(input, output, session) {
    })
   
   #Outputs the graph
+  #----OutputGraphFunction----
   observeEvent(input$outputGraph, {
-    #print("This should happen immediatly")
     if(input$theDataSet == 'Iris'){
       dataset <- na.omit(iris)
       predictor <- iris$Species      #predictor is the variable that we are going to try to predict based off training data algorithm testing the validation algorithm
+      #print(predictor)
+      #print("End of first output of predictor") 
       predictionVariable <- input$theVariable
       #outputType <- "categorical"
     }
@@ -571,8 +659,8 @@ server <- function(input, output, session) {
       #Cleaning
       dataset[dataset == "?"] <- NA
       dataset <- na.omit(dataset)
-      #dataset[dataset$sex == 0,]$sex <- "female"
-      #dataset[dataset$sex == 1,]$sex <- "male"
+      dataset[dataset$sex == 0,]$sex <- "female"
+      dataset[dataset$sex == 1,]$sex <- "male"
       dataset$sex <- as.factor(dataset$sex)
       dataset$cp <- as.factor(dataset$cp)
       dataset$fbs <- as.factor(dataset$fbs)
@@ -610,11 +698,11 @@ server <- function(input, output, session) {
      trainingPercents <-.5
      count <- 1
      testingPercent <- list(.5,.55,.6,.65,.7,.75,.8,.85,.9,.95)
-
      
      
      newAverages <- list(0,0,0,0,0,0,0,0,0,0)
-     totalRuns <- 30 #Was 40 before
+     totalRuns <- as.numeric(input$repetitions)
+     print(totalRuns)
      count <- 1
      
      #As the probability is being calculated these lists store the values from each test and sort them by percent in training data 
@@ -675,52 +763,170 @@ server <- function(input, output, session) {
      stdev[[9]] <- sd(unlist(x = consistency90, recursive = TRUE, use.names = TRUE), na.rm = TRUE)
      stdev[[10]] <- sd(unlist(x = consistency95, recursive = TRUE, use.names = TRUE), na.rm = TRUE)
      
-     
+     #Output the plots
      #Categorical
      if(input$theMethod == "Linear Discriminant Analysis" || input$theMethod == "Logistic Regression")
      {
         accuracyDataFrame <- do.call(rbind, Map(data.frame, testingPercent = testingPercent, percentCorrectCalculation = percentCorrectCalculation))
        
-        output$overallPlot <- renderPlot({ggplot(data = accuracyDataFrame, aes(testingPercent,percentCorrectCalculation)) +
-            xlab("Percent in training set") +
-            ylab("Percent that the prediction is correct") +
+        output$overallPlot <- renderPlot({ggplot(data = accuracyDataFrame, aes(testingPercent * 100, percentCorrectCalculation)) +
+            xlab("Percent In Training Set") +
+            ylab("% Correct") +
+            theme(text = element_text(size=20)) +
             geom_point() +
-            stat_smooth(method = "lm", formula = y ~ poly(x, 2), size = 1)
+            stat_smooth(method = "lm", formula = y ~ poly(x, 3), size = 1, se = FALSE)
           })
         
         
         resultsDataFrame <- do.call(rbind, Map(data.frame, testingPercent = testingPercent, stdev = stdev))
         
-        output$consistencyPlot <- renderPlot({ggplot(data = resultsDataFrame, aes(testingPercent, stdev)) +
-            xlab("Percent in training set") +
-            ylab("Standard deviation of the percentages correct for each set") +
+        output$consistencyPlot <- renderPlot({ggplot(data = resultsDataFrame, aes(testingPercent * 100, stdev)) +
+            xlab("Percent In Training Set") +
+            ylab("Standard deviation of % Correct") +
+            theme(text = element_text(size=20)) +
             geom_point() +
-            stat_smooth(method = "lm", formula = y ~ poly(x, 2), size = 1)
+            stat_smooth(method = "lm", formula = y ~ poly(x, 3), size = 1, se = FALSE)
           })
      }
      else #quantitative
      {
        accuracyDataFrame <- do.call(rbind, Map(data.frame, testingPercent = testingPercent, percentCorrectCalculation = percentCorrectCalculation))
        
-       output$overallPlot <- renderPlot({ggplot(data = accuracyDataFrame, aes(testingPercent, percentCorrectCalculation)) +
-           xlab("Percent in training set") +
-           ylab("MSOS of the absolute distance from correct answer (So low is better)") +
+       output$overallPlot <- renderPlot({ggplot(data = accuracyDataFrame, aes(testingPercent * 100, percentCorrectCalculation)) +
+           xlab("Percent In Training Set") +
+           ylab("MSOS of the Distance From Answer") +
+           theme(text = element_text(size=20)) +
            geom_point() +
-           stat_smooth(method = "lm", formula = y ~ poly(x, 2), size = 1)
-         
+           stat_smooth(method = "lm", formula = y ~ poly(x, 3), size = 1, se = FALSE)
          })
-       
        
        #STD deviation
        resultsDataFrame <- do.call(rbind, Map(data.frame, testingPercent = testingPercent, stdev = stdev))
        
-       output$consistencyPlot <- renderPlot({ggplot(data = resultsDataFrame, aes(testingPercent, stdev)) +
+       output$consistencyPlot <- renderPlot({ggplot(data = resultsDataFrame, aes(testingPercent * 100, stdev)) +
+           xlab("Percent In Training Set") +
+           ylab("St Dev of the absolute distance") +
            geom_point() +
-           stat_smooth(method = "lm", formula = y ~ poly(x, 2), size = 1)
+           theme(text = element_text(size=20)) +
+           stat_smooth(method = "lm", formula = y ~ poly(x, 3), size = 1, se = FALSE)
          #+ lines(aes(testingPercent, predict(quadraticRegression), col = 2))
        })
     }
   })
+  
+  
+  
+  
+  #----observeEvent(input$newGraphOutput)----
+  observeEvent(input$newGraphOutput, {
+    
+    
+    if(input$theDataSet == 'Iris'){
+      dataset <- na.omit(iris)
+      predictor <- iris$Species      #predictor is the variable that we are going to try to predict based off training data algorithm testing the validation algorithm
+      #print(predictor)
+      #print("End of first output of predictor") 
+      predictionVariable <- input$theVariable
+      #outputType <- "categorical"
+    }
+    else if(input$theDataSet == 'Marketing')
+    {
+      dataset <- read.csv("marketing.csv")
+      predictor <- dataset$sales
+      predictionVariable <- input$theVariable
+      #outputType <- "continuous"
+    }
+    else if(input$theDataSet == "Heart Disease")
+    {
+      #https://www.youtube.com/watch?v=C4N3_XJJ-jU was important
+      dataset <- read.csv("HeartDiseaseData.csv")
+      #Cleaning
+      dataset[dataset == "?"] <- NA
+      dataset <- na.omit(dataset)
+      dataset[dataset$sex == 0,]$sex <- "female"
+      dataset[dataset$sex == 1,]$sex <- "male"
+      dataset$sex <- as.factor(dataset$sex)
+      dataset$cp <- as.factor(dataset$cp)
+      dataset$fbs <- as.factor(dataset$fbs)
+      dataset$restecg <- as.factor(dataset$restecg)
+      dataset$exang <- as.factor(dataset$exang)
+      dataset$slope <- as.factor(dataset$slope)
+      dataset$ca <- as.integer(dataset$ca)
+      dataset$ca <- as.factor(dataset$ca)
+      dataset$thal <- as.integer(dataset$thal) # "thal" also had "?"s in it.
+      dataset$thal <- as.factor(dataset$thal)
+      ## This next line replaces 0 and 1 with "Healthy" and "Unhealthy"
+      #dataset$hd <- ifelse(test=dataset$hd == 0, yes="Healthy", no="Unhealthy") #I might remove
+      dataset$hd <- as.factor(dataset$hd) # Now convert to a factor
+      predictor <- dataset$hd
+      predictionVariable <- input$theVariable
+    }
+    else if(input$theDataSet == 'Palmer Penguins'){
+      dataset <- na.omit(penguins)
+      predictor <- dataset$species
+      predictionVariable <- input$theVariable
+      #outputType <- "categorical"
+    }
+    else if(input$theDataSet == "House Data"){
+      dataset <- read.csv("HouseTrain.csv")
+      predictor <- dataset$SalePrice
+      predictionVariable <- input$theVariable
+      #outputType <- "categorical"
+    }
+    else{
+      print('ERROR')
+    }
+    
+    
+    
+    #consistency50 <- vector(mode = "list", length = totalRuns)
+    count <- 1
+    totalRuns <- as.numeric(input$repetitions)
+    
+    while(count <= totalRuns)
+    {
+      percentCorrect <- calculateAccuracy(dataset, input$testingPercent, input$theMethod, predictor, predictionVariable)
+      percentCorrect <- signif(percentCorrect,4)
+      
+      print(input$testingPercent)
+      print(percentCorrect)
+      currentPoints <- data.frame(
+        percentTraining = input$testingPercent,
+        accuracyValue = percentCorrect
+      )
+      
+      count <- count+1
+      ###---- Store new values ----
+      tracking$DT <- rbind(tracking$DT, currentPoints)
+    }
+    
+    
+  })
+  
+  
+  
+  
+  output$newAccuracy <- renderPlot({
+    if (is.null(tracking$DT) || nrow(tracking$DT) == 0) {
+      basePerformPlot
+    } else {
+      basePerformPlot +
+        geom_point(
+          data = tracking$DT,
+          mapping = aes(
+            x = percentTraining,
+            y = accuracyValue
+          ),
+          size = 4
+        ) +
+        theme(
+          legend.position = "bottom"
+        ) +
+        stat_smooth(method = "lm", formula = y ~ poly(x, 3), size = 1, se = FALSE)
+      
+    }
+  })
+  
 }
 
 #})
