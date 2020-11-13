@@ -35,24 +35,6 @@ APP_DESCP  <<- paste(
 )
 # End App Meta Data------------------------------------------------------------
 
-# Load additional dependencies and setup functions
-basePerformPlot <- ggplot(
-  data = data.frame(x = seq(from = 0.5, to = 1), y = seq(from = 0, to = 1)),
-  mapping = aes(x = x, y = y)
-) +
-  #geom_abline(slope = 1, intercept = 0) +
-  theme_bw() +
-  xlab("Proportion in Training Set") +
-  ylab("Accuracy, (Percent for categorical, quantitative the MSOS of the difference") +
-  labs(title = "Your Performance") +
-  theme(
-    text = element_text(size = 18)
-  ) +
-  scale_x_continuous(limits = c(.5, 1), expand = expansion(mult = 0.01, add = 0)) +
-  scale_y_continuous(limits = c(0, .2), expand = expansion(mult = 0.01, add = 0))
-
-#100 for categorical sample, .2 for quantitative example
-
 
 {
 # Define UI for App
@@ -154,6 +136,7 @@ ui <- list(
           t("The normal amount of training data set vs validation data set is"),
           t("80% training and 20% test set"),
           br(), br(),
+          wellPanel(
           fluidRow(
             column(2,
                    selectInput(inputId = 'theDataSet', label = 'Dataset', choices = list('Iris','Palmer Penguins', 'Marketing', 'Heart Disease'), selected = 'Iris'),
@@ -178,40 +161,41 @@ ui <- list(
                    
                   )
             
-          ),
+          )),
           
           #This stores and hides the dataset and the extra information the user may be interested in. 
           br(),
           br(),
           br(),
-          selectInput(inputId = 'theMethod', label = 'Method', 
-                      choices = list('Linear Discriminant Analysis',
-                             'Multiple Linear Regression','Logistic Regression',
-                             'Ridge Regression', 'LASSO', 'XGboost'), 
-                      selected = 'Linear Discriminant Analysis'),
-          #Ethan 10/1
-          selectInput(inputId = 'repetitions', label = '# of repititions at each value',
-                            choices = list(5,10,20,30,40,50,70,100),
-                            selected = 20),
+          
           
           fluidRow(
             column(4,
+                   wellPanel(
+                   selectInput(inputId = 'theMethod', label = 'Method', 
+                               choices = list('Linear Discriminant Analysis',
+                                              'Multiple Linear Regression','Logistic Regression',
+                                              'Ridge Regression', 'LASSO', 'XGboost'), 
+                               selected = 'Linear Discriminant Analysis'),
+                   #Ethan 10/1
+                   selectInput(inputId = 'repetitions', label = '# of repititions at each value',
+                               choices = list(5,10,20,30,40,50,70,100),
+                               selected = 20),
                    #actionButton('runTest', 'Test Accuracy'),
                    actionButton('newGraphOutput', 'Add Points to Graph'),
                    sliderInput('testingPercent','Percent tester',
                                min = .5, max = .9, value = .80, step = .1),
-                   textOutput('accuracyResult')),
+                   textOutput('accuracyResult'))),
                    #textOutput('results')),
-            column(4,
+            column(8,
                    #actionButton('outputGraph','Output Graph'),
                    #plotOutput('overallPlot')
-                   ),
-            column(4,
                    #br(),
                    #plotOutput('consistencyPlot')
-                   )
+                   plotOutput(outputId = "newAccuracy", width = "100%")
+                   ),
           ),
-          plotOutput(outputId = "newAccuracy", width = "100%")
+          
         ),
         
         
@@ -240,14 +224,140 @@ server <- function(input, output, session) {
     updateTabItems(session, "tabs", "expl")
   })
   
+  
+  # Load additional dependencies and setup functions
+  basePerformPlot <- ggplot(
+    data = data.frame(x = seq(from = 0.5, to = 1), y = seq(from = 0, to = 1)),
+    mapping = aes(x = x, y = y)
+  ) +
+    #geom_abline(slope = 1, intercept = 0) +
+    theme_bw() +
+    xlab("Proportion in Training Set") +
+    ylab("The MSOS of the difference (so lower the better)") +
+    labs(title = "Your Performance") +
+    theme(
+      text = element_text(size = 18)
+    ) +
+    scale_x_continuous(limits = c(.5, 1), expand = expansion(mult = 0.01, add = 0)) +
+    scale_y_continuous(limits = c(80, 100), expand = expansion(mult = 0.01, add = 0))
+  
+  #100 for categorical sample, .2 for quantitative example
+  
+  
   tracking <- reactiveValues()
   tracking$DT <- data.frame(
     percentTraining = numeric(),
     accuracyValue = numeric()
   )
-  
+  #----New reactives----
+  yLabel <- reactive({
+    yLabel <- input$theVariable
+    if(input$theVariable == "Species" || input$theVariable == "species" || input$theVariable == "island" || input$theVariable == "sex" || input$theVariable == "hd")
+    {
+      yLabel <- "Percent of correctly predicted categories"
+    }
+    else
+    {
+     yLabel <- "The MSOS of the difference (so lower the better)"
+    }
+    yLabel
+  })
 
-  
+
+  minYAxis <- reactive({
+    var <- input$theVariable
+    if(input$theVariable == "Sepal.Length")
+    {
+      minYAxis <-0
+    }
+    else if(input$theVariable == "Species")
+    {
+      minYAxis <-90
+    }
+    else if(input$theVariable == "species")
+    {
+      minYAxis <-90
+    }
+    else if(input$theVariable == "island")
+    {
+      minYAxis <-70
+    }
+    else if(input$theVariable == "body_mass_g")
+    {
+      minYAxis <-0
+    }
+    else if(input$theVariable == "sex")
+    {
+      minYAxis <-40
+    }
+    else if(input$theVariable == "youtube")
+    {
+      minYAxis <-0
+    }
+    else if(input$theVariable == "sales")
+    {
+      minYAxis <-0
+    }
+    else if(input$theVariable == "hd")
+    {
+      minYAxis <-50
+    }
+    else if(input$theVariable == "age")
+    {
+      minYAxis <-0
+    }
+    else
+    {
+      #print("test")
+    }
+  })
+  maxYAxis <- reactive({
+    if(input$theVariable == "Sepal.Length")
+    {
+      maxYAxis <- .2
+    }
+    else if(input$theVariable == "Species")
+    {
+      maxYAxis <-100
+    }
+    else if(input$theVariable == "species")
+    {
+      maxYAxis <-100
+    }
+    else if(input$theVariable == "island")
+    {
+      maxYAxis <-100
+    }
+    else if(input$theVariable == "body_mass_g")
+    {
+      maxYAxis <-8
+    }
+    else if(input$theVariable == "sex")
+    {
+      maxYAxis <-100
+    }
+    else if(input$theVariable == "youtube")
+    {
+      maxYAxis <-8
+    }
+    else if(input$theVariable == "sales")
+    {
+      maxYAxis <-8
+    }
+    else if(input$theVariable == "hd")
+    {
+      maxYAxis <-8
+    }
+    else if(input$theVariable == "age")
+    {
+      maxYAxis <-100
+    }
+    else
+    {
+      #print("test")
+    }
+  })
+
   
 ####### This changes what variables can be picked after the dataset selected changes
   #----Dataset Chosen, observeEvent(input$theDataSet), ----
@@ -398,6 +508,10 @@ server <- function(input, output, session) {
     {
       #print("test")
     }
+    tracking$DT <- data.frame(
+      percentTraining = numeric(),
+      accuracyValue = numeric()
+    )
   })
 
   #Input: data set, the testingPercent (average .8), method used
@@ -904,13 +1018,48 @@ server <- function(input, output, session) {
   })
   
   
-  
+  # # Load additional dependencies and setup functions
+  basePerformPlot <- ggplot(
+    data = data.frame(x = seq(from = 0.5, to = 1), y = seq(from = 0, to = 1)),
+    mapping = aes(x = x, y = y)
+  ) +
+    #geom_abline(slope = 1, intercept = 0) +
+    theme_bw() +
+    xlab("Proportion in Training Set") +
+    ylab("MSOS error") +
+    labs(title = "Your Performance") +
+    theme(
+      text = element_text(size = 18)
+    ) +
+    scale_x_continuous(limits = c(.5, 1), expand = expansion(mult = 0.01, add = 0)) +
+    scale_y_continuous(limits = c(80, 100), expand = expansion(mult = 0.01, add = 0))
+
+  # #100 for categorical sample, .2 for quantitative example
+  #   basePerformPlot <- ggplot(
+  # data = data.frame(x = seq(from = 0.5, to = 1), y = seq(from = 0, to = 1)),
+  # mapping = aes(x = x, y = y)
+  # ) +
+  # #geom_abline(slope = 1, intercept = 0) +
+  # theme_bw() +
+  # xlab("Proportion in Training Set") +
+  # ylab("MSOS error") +
+  # labs(title = "Your Performance") +
+  # theme(
+  #   text = element_text(size = 18)
+  # ) +
+  # scale_x_continuous(limits = c(.5, 1), expand = expansion(mult = 0.01, add = 0)) +
+  # scale_y_continuous(limits = c(80, 100), expand = expansion(mult = 0.01, add = 0))
+
   
   output$newAccuracy <- renderPlot({
     if (is.null(tracking$DT) || nrow(tracking$DT) == 0) {
       basePerformPlot
-    } else {
+    } 
+    else {
       basePerformPlot +
+        scale_y_continuous(limits = c(minYAxis(), maxYAxis(), expand = expansion(mult = 0.01, add = 0))) +
+        
+        #scale_y_continuous(limits = c(minYAxis(), yMax(), expand = expansion(mult = 0.01, add = 0))) +
         geom_point(
           data = tracking$DT,
           mapping = aes(
@@ -919,11 +1068,11 @@ server <- function(input, output, session) {
           ),
           size = 4
         ) +
+        ylab(yLabel()) +
         theme(
           legend.position = "bottom"
         ) +
         stat_smooth(method = "lm", formula = y ~ poly(x, 3), size = 1, se = FALSE)
-      
     }
   })
   
