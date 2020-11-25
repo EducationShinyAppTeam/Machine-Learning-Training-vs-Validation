@@ -25,7 +25,6 @@ library(MASS)
 library(glmnet)
 library(lars)
 library(DT)
-library(xgboost)
 data(iris)
 # App Meta Data----------------------------------------------------------------
 APP_TITLE  <<- "[Base App for Fill in the Blank]"
@@ -139,7 +138,8 @@ ui <- list(
           wellPanel(
           fluidRow(
             column(2,
-                   selectInput(inputId = 'theDataSet', label = 'Dataset', choices = list('Iris','Palmer Penguins', 'Marketing', 'Heart Disease'), selected = 'Iris'),
+                   selectInput(inputId = 'theDataSet', label = 'Dataset', choices = list('Heart Disease', 'Palmer Penguins', 'Marketing','Iris'), selected = 'Heart Disease'),
+                   selectInput(inputId = 'theVariable', label = 'Variable to predict', choices = list('Species', 'Sepal.Length', 'Sepal.Width', 'Petal.Length', 'Petal.Width'), selected = 'Species'),
                    ),
             column(4,
                    textOutput("dataTableInfo"), #Gives basic info on dataset
@@ -150,17 +150,10 @@ ui <- list(
                      collapsed = TRUE,
                      width = '100%',
                      DT::dataTableOutput("dataTable") #Shows first 10 cases in table
-                   )
-                   ),
-            column(2,
-                   selectInput(inputId = 'theVariable', label = 'Variable to predict', choices = list('Species', 'Sepal.Length', 'Sepal.Width', 'Petal.Length', 'Petal.Width'), selected = 'Species'),
-                   ),
-            column(4,
-                   
+                   )),
+            column(6,
                    uiOutput("dataTableVariables")
-                   
                   )
-            
           )),
           
           #This stores and hides the dataset and the extra information the user may be interested in. 
@@ -175,16 +168,16 @@ ui <- list(
                    selectInput(inputId = 'theMethod', label = 'Method', 
                                choices = list('Linear Discriminant Analysis',
                                               'Multiple Linear Regression','Logistic Regression',
-                                              'Ridge Regression', 'LASSO', 'XGboost'), 
+                                              'Ridge Regression', 'LASSO'), 
                                selected = 'Linear Discriminant Analysis'),
                    #Ethan 10/1
-                   selectInput(inputId = 'repetitions', label = '# of repititions at each value',
-                               choices = list(5,10,20,30,40,50,70,100),
+                   selectInput(inputId = 'repetitions', label = 'number of repititions at each value',
+                               choices = list(5,10,20,30,40,50,70,100,3000),
                                selected = 20),
                    #actionButton('runTest', 'Test Accuracy'),
                    actionButton('newGraphOutput', 'Add Points to Graph'),
                    sliderInput('testingPercent','Percent tester',
-                               min = .5, max = .9, value = .80, step = .1),
+                               min = .2, max = .95, value = .80, step = .05),
                    textOutput('accuracyResult'))),
                    #textOutput('results')),
             column(8,
@@ -233,7 +226,7 @@ server <- function(input, output, session) {
     #geom_abline(slope = 1, intercept = 0) +
     theme_bw() +
     xlab("Proportion in Training Set") +
-    ylab("The MSOS of the difference (so lower the better)") +
+    ylab("The MSOS of the error (so lower the better)") +
     labs(title = "Your Performance") +
     theme(
       text = element_text(size = 18)
@@ -252,17 +245,16 @@ server <- function(input, output, session) {
   #----New reactives----
   yLabel <- reactive({
     yLabel <- input$theVariable
-    if(input$theVariable == "Species" || input$theVariable == "species" || input$theVariable == "island" || input$theVariable == "sex" || input$theVariable == "hd")
+    if(input$theVariable == "Species" || input$theVariable == "species" || input$theVariable == "island" || input$theVariable == "sex" || input$theVariable == "target")
     {
-      yLabel <- "Percent of correctly predicted categories"
+      yLabel <- "% of Correct Predictions"
     }
     else
     {
-     yLabel <- "The MSOS of the difference (so lower the better)"
+     yLabel <- "The MSOS of the error (so lower the better)"
     }
     yLabel
   })
-
 
   minYAxis <- reactive({
     var <- input$theVariable
@@ -298,9 +290,9 @@ server <- function(input, output, session) {
     {
       minYAxis <-0
     }
-    else if(input$theVariable == "hd")
+    else if(input$theVariable == "target")
     {
-      minYAxis <-50
+      minYAxis <-40
     }
     else if(input$theVariable == "age")
     {
@@ -344,9 +336,9 @@ server <- function(input, output, session) {
     {
       maxYAxis <-8
     }
-    else if(input$theVariable == "hd")
+    else if(input$theVariable == "target")
     {
-      maxYAxis <-8
+      maxYAxis <-100
     }
     else if(input$theVariable == "age")
     {
@@ -440,10 +432,10 @@ server <- function(input, output, session) {
              Slope: of peak exercise ST segment,</li><li>
              ca: # vessels colored by flourosopy (0-3) </li><li>
              thal: Thalassemia level (blood disorder) the lower the better</li><li>
-             hd: heart disease (healthy or unhealthy)</li></ul>")
+             target: heart disease (healthy or unhealthy)</li></ul>")
         )
       updateSelectInput(session, inputId = "theVariable", label = NULL,
-                        choices = list('age', 'sex', 'hd'))
+                        choices = list('age', 'sex', 'target'))
     }
     else{
       updateSelectInput(session,inputId = "theVariable", lable = NULL,
@@ -462,12 +454,12 @@ server <- function(input, output, session) {
     else if(input$theVariable == "Species")
     {
       updateSelectInput(session, inputId = "theMethod", label = NULL,
-                        choices = list("Linear Discriminant Analysis", "Logistic Regression", "XGboost"))
+                        choices = list("Linear Discriminant Analysis"))
     }
     else if(input$theVariable == "species")
     {
       updateSelectInput(session, inputId = "theMethod", label = NULL,
-                        choices = list("Linear Discriminant Analysis","Logistic Regression"))
+                        choices = list("Linear Discriminant Analysis"))
     }
     else if(input$theVariable == "island")
     {
@@ -487,14 +479,14 @@ server <- function(input, output, session) {
     else if(input$theVariable == "youtube")
     {
       updateSelectInput(session, inputId = "theMethod", label = NULL,
-                        choices = list("Multiple Linear Regression", "Ridge Regression", "LASSO", "XGboost"))
+                        choices = list("Multiple Linear Regression", "Ridge Regression", "LASSO"))
     }
     else if(input$theVariable == "sales")
     {
       updateSelectInput(session, inputId = "theMethod", label = NULL,
-                        choices = list("Multiple Linear Regression", "Ridge Regression", "LASSO", "XGboost"))
+                        choices = list("Multiple Linear Regression", "Ridge Regression", "LASSO"))
     }
-    else if(input$theVariable == "hd")
+    else if(input$theVariable == "target")
     {
       updateSelectInput(session, inputId = "theMethod", label = NULL,
                         choices = list("Logistic Regression","Linear Discriminant Analysis"))
@@ -502,7 +494,7 @@ server <- function(input, output, session) {
     else if(input$theVariable == "age")
     {
       updateSelectInput(session, inputId = "theMethod", label = NULL,
-                        choices = list("Multiple Linear Regression", "Ridge Regression", "LASSO", "XGboost"))
+                        choices = list("Multiple Linear Regression", "Ridge Regression", "LASSO"))
     }
     else
     {
@@ -532,14 +524,15 @@ server <- function(input, output, session) {
 
 
     if(method == 'Linear Discriminant Analysis') {
-      fit.lda <- lda(eval(parse(text = paste(predictionVariable,'~.'))), data=trainingDataset, na.action="na.omit") #, prior = c(1,1,1)/3
+      fit.lda <- lda(eval(parse(text = paste(predictionVariable,'~.'))), data=trainingDataset, na.action="na.omit")
       predictions <- predict(object = fit.lda, newdata = validation)
       finalPredictions <- predictions$class
       outputType <- "categorical"
+      print(finalPredictions)
     }
     else if(method == 'Multiple Linear Regression')
     {
-      trainingDataset
+      print(trainingDataset)
       fit.lm <- lm(eval(parse(text = paste(predictionVariable, '~.'))), data = trainingDataset)
       finalPredictions <- predict(fit.lm, validation)
       outputType <- "continuous" 
@@ -547,16 +540,18 @@ server <- function(input, output, session) {
     else if(method == 'Logistic Regression'){
       fit.lr <- glm(eval(parse(text = paste(predictionVariable, '~.'))), data = trainingDataset, family = "binomial")
       probabilities <- predict(fit.lr, validation, type = "response")
+      print(predictionVariable)
       #print(probabilities)
       if(predictionVariable ==  "sex")
         finalPredictions <- ifelse(probabilities < 0.5, "female", "male")
-      else if(predictionVariable == "hd")
-        finalPredictions <- ifelse(probabilities > 0.5, "Unhealthy", "Healthy")
+      else if(predictionVariable == "target"){
+        finalPredictions <- ifelse(probabilities > 0.5, 1, 0) #1 unhealthy and 2 healthy
+      }
       else
-        #print(predictionVariable)
+        print("")
         
-      #print(finalPredictions)
-      #fit.lr <- glm(hd ~ ., data = trainingDataset, family = "binomial")
+      print(finalPredictions)
+      #fit.lr <- glm(target ~ ., data = trainingDataset, family = "binomial")
       #probabilities <- predict(fit.lr, validation, type = "response")
       #finalPredictions <- ifelse(probabilities > 0.5, "Unhealthy", "Healthy")
       outputType <- "categorical"
@@ -589,64 +584,9 @@ server <- function(input, output, session) {
       
       outputType <- "continuous"
     }
-    else #This is for XGboost
+    else 
     {
-      #Might be necessary in the future to improve the callebration of the code below
-      #   Much of it is found here 
-      #   https://www.analyticsvidhya.com/blog/2016/01/xgboost-algorithm-easy-steps/
-      species <- iris$Species
-    
       
-      train.label <- as.integer(predictor) - 1
-      
-      #print(train.label)
-      #print(class(train.label))
-      xgb.train <- xgb.DMatrix(data = trainingDataset, label = train.label)
-      xgb.train <- xgb.DMatrix(data = trainingDataset, label = train.label)
-      
-      num_class <- length(levels(species))
-      
-      params = list(
-        booster="gbtree",
-        eta=0.001,
-        max_depth=5,
-        gamma=3,
-        subsample=0.75,
-        colsample_bytree=1,
-        objective="multi:softprob",
-        eval_metric="mlogloss",
-        num_class=num_class
-      )
-      xgb.train(
-        params=params,
-        data=xgb.train,
-        nrounds=10000,
-        nthreads=1,
-        early_stopping_rounds=10,
-        watchlist=list(val1=xgb.train,val2=xgb.test),
-        verbose=0
-      )
-      
-      xgb.pred$prediction = apply(xgb.pred,1,function(x) colnames(xgb.pred)[which.max(x)])
-      xgb.pred$label = levels(species)[test.label+1]
-      
-      # train.index <- sample()
-      # labels <- trainingDataset[,predictionVariable]
-      # print(labels)
-      # xgb <- xgboost(data = data.matrix(trainingDataset[, names(trainingDataset) != predictionVariable]),
-      #                label = labels,
-      #                eta = 0.1,
-      #                max_depth = 15,
-      #                nround=25,
-      #                subsample = 0.5,
-      #                colsample_bytree = 0.5,
-      #                seed = 1,
-      #                eval_metric = "merror",
-      #                objective = "multi:softprob",
-      #                num_class = 12,
-      #                nthread = 3)
-      # y_pred <- predict(xgb, data.matrix(trainingDataset[, names(trainingDataset) != predictionVariable]))
-      # outputType <- "continuous"
     }
 
     #6 Make predictions
@@ -655,7 +595,7 @@ server <- function(input, output, session) {
     {
       count <- 0
       correct <- 0
-      #print(validation$hd)
+      #print(validation$target)
       #print(finalPredictions)
       for(word in finalPredictions)
       {
@@ -714,6 +654,7 @@ server <- function(input, output, session) {
     else if(input$theDataSet == "Heart Disease")
     {
       #https://www.youtube.com/watch?v=C4N3_XJJ-jU was important
+      #undid a lot of as.factors
       dataset <- read.csv("HeartDiseaseData.csv")
       #Cleaning
       dataset[dataset == "?"] <- NA
@@ -723,17 +664,16 @@ server <- function(input, output, session) {
       dataset$sex <- as.factor(dataset$sex)
       dataset$cp <- as.factor(dataset$cp)
       dataset$fbs <- as.factor(dataset$fbs)
-      dataset$restecg <- as.factor(dataset$restecg)
       dataset$exang <- as.factor(dataset$exang)
       dataset$slope <- as.factor(dataset$slope)
-      dataset$ca <- as.integer(dataset$ca)
-      dataset$ca <- as.factor(dataset$ca)
+      # dataset$ca <- as.integer(dataset$ca)
+      # dataset$ca <- as.factor(dataset$ca)
       dataset$thal <- as.integer(dataset$thal) # "thal" also had "?"s in it.
       dataset$thal <- as.factor(dataset$thal)
       ## This next line replaces 0 and 1 with "Healthy" and "Unhealthy"
-      #dataset$hd <- ifelse(test=dataset$hd == 0, yes="Healthy", no="Unhealthy") #I might remove
-      dataset$hd <- as.factor(dataset$hd) # Now convert to a factor
-      predictor <- dataset$hd
+      #dataset$target <- ifelse(test=dataset$target == 0, yes="Healthy", no="Unhealthy") #I might remove
+      dataset$target <- as.factor(dataset$target) # Now convert to a factor
+      predictor <- dataset$target
       predictionVariable <- input$theVariable
     }
     else{
@@ -786,9 +726,9 @@ server <- function(input, output, session) {
       dataset$thal <- as.integer(dataset$thal) # "thal" also had "?"s in it.
       dataset$thal <- as.factor(dataset$thal)
       ## This next line replaces 0 and 1 with "Healthy" and "Unhealthy"
-      #dataset$hd <- ifelse(test=dataset$hd == 0, yes="Healthy", no="Unhealthy") #I might remove
-      dataset$hd <- as.factor(dataset$hd) # Now convert to a factor
-      predictor <- dataset$hd
+      #dataset$target <- ifelse(test=dataset$target == 0, yes="Healthy", no="Unhealthy") #I might remove
+      dataset$target <- as.factor(dataset$target) # Now convert to a factor
+      predictor <- dataset$target
       predictionVariable <- input$theVariable
     }
     else if(input$theDataSet == 'Palmer Penguins'){
@@ -954,25 +894,22 @@ server <- function(input, output, session) {
     {
       #https://www.youtube.com/watch?v=C4N3_XJJ-jU was important
       dataset <- read.csv("HeartDiseaseData.csv")
+      names(dataset)[names(dataset) == `ï..age`] <- "age"
       #Cleaning
       dataset[dataset == "?"] <- NA
       dataset <- na.omit(dataset)
+      #test
       dataset[dataset$sex == 0,]$sex <- "female"
       dataset[dataset$sex == 1,]$sex <- "male"
       dataset$sex <- as.factor(dataset$sex)
-      dataset$cp <- as.factor(dataset$cp)
       dataset$fbs <- as.factor(dataset$fbs)
-      dataset$restecg <- as.factor(dataset$restecg)
       dataset$exang <- as.factor(dataset$exang)
-      dataset$slope <- as.factor(dataset$slope)
       dataset$ca <- as.integer(dataset$ca)
-      dataset$ca <- as.factor(dataset$ca)
       dataset$thal <- as.integer(dataset$thal) # "thal" also had "?"s in it.
-      dataset$thal <- as.factor(dataset$thal)
       ## This next line replaces 0 and 1 with "Healthy" and "Unhealthy"
-      #dataset$hd <- ifelse(test=dataset$hd == 0, yes="Healthy", no="Unhealthy") #I might remove
-      dataset$hd <- as.factor(dataset$hd) # Now convert to a factor
-      predictor <- dataset$hd
+      #dataset$target <- ifelse(test=dataset$target == 0, yes="Healthy", no="Unhealthy") #I might remove
+      dataset$target <- as.factor(dataset$target) # Now convert to a factor
+      predictor <- dataset$target
       predictionVariable <- input$theVariable
     }
     else if(input$theDataSet == 'Palmer Penguins'){
