@@ -1,0 +1,12 @@
+name: machine-learning-training-vs-validation2
+title: Machine-Learning-Training-vs-Validation
+username: ejw36
+account: ejw36
+server: rstudio-connect.tlt.psu.edu
+hostUrl: https://rstudio-connect.tlt.psu.edu:3939/__api__
+appId: 320
+bundleId: 1699
+url: https://rstudio-connect.tlt.psu.edu:3939/content/320/
+when: 1606744528.39501
+asMultiple: FALSE
+asStatic: FALSE
