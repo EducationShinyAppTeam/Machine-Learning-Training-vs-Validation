@@ -56,8 +56,8 @@ ui <- list(
       title = "ML App", # You may use a shortened form of the title here
       tags$li(class = "dropdown", actionLink("info", icon("info"))),
       tags$li(class = "dropdown",
-              tags$a(href='https://github.com/EducationShinyAppTeam/BOAST',
-                     icon("github"))),
+              tags$a(href='https://pennstate.qualtrics.com/jfe/form/SV_7TLIkFtJEJ7fEPz?appName=',
+                     icon("comments"))),
       tags$li(class = "dropdown",
               tags$a(href='https://shinyapps.science.psu.edu/',
                      icon("home")))
@@ -68,8 +68,8 @@ ui <- list(
         id = "tabs",
         menuItem("Overview", tabName = "overview", icon = icon("dashboard")),
         menuItem("Prerequisites", tabName = "prerequisites", icon = icon("book")),
-        menuItem("Explore ML", tabName = "expl", icon = icon("wpexplorer")),
-        menuItem("ML Challenge", tabName = "challenge", icon = icon("gamepad"))
+        menuItem("Explore ML", tabName = "expl", icon = icon("wpexplorer"))
+        #menuItem("ML Challenge", tabName = "challenge", icon = icon("gamepad"))
       ),
       tags$div(
         class = "sidebar-logo",
@@ -89,7 +89,7 @@ ui <- list(
           p('In this app you will study how the accuracy of a machine learning algorithm
             is affected by the percent of the cases in the training dataset vs the testing dataset.
             As you go pay attention to how the accuracy of the data along with the standard 
-            deviation increases and decreases and to what amount')
+            deviation increases and decreases.')
          ),
         
         #### Set up the Overview Page
@@ -98,10 +98,10 @@ ui <- list(
           withMathJax(),
           h1("Intro to Machine Learning"), # This should be the full name.
           h2("Instructions"),
-          p("Each tab will bring you further through the lesson"),
           tags$ol(
-            tags$li("Explore ML will display the accuracy of the machine learning based off testing and training percentages"),
-            tags$li("Then you will choose the best percentage in next game"),
+            tags$li("Check over the prerequisites"),
+            tags$li("Examine the effect of percent of training Data on variance of the accuracy"),
+            tags$li("Examine the effect of percent of training Data on the accuracy mean")
           ),
           ##### Go Button--location will depend on your goals
           div(
@@ -123,7 +123,7 @@ ui <- list(
             "I would like to extend a special thanks to the Shiny Program
             Students.",
             br(),br(),br(),
-            div(class = "updated", "Last Update: 6/15/2020 by EJW")
+            div(class = "updated", "Last Update: 11/30/2020 by EJW")
           )
         ),
         
@@ -152,9 +152,17 @@ ui <- list(
                      DT::dataTableOutput("dataTable") #Shows first 10 cases in table
                    )),
             column(6,
-                   uiOutput("dataTableVariables")
+                   box(
+                     title = strong("Variable Information"),
+                     status = "primary",
+                     collapsible = TRUE,
+                     collapsed = TRUE,
+                     width = '100%',
+                     uiOutput("dataTableVariables")
+                   )),
+                  
                   )
-          )),
+          ),
           
           #This stores and hides the dataset and the extra information the user may be interested in. 
           br(),
@@ -185,7 +193,11 @@ ui <- list(
                    #plotOutput('overallPlot')
                    #br(),
                    #plotOutput('consistencyPlot')
-                   plotOutput(outputId = "newAccuracy", width = "100%")
+                   plotOutput(outputId = "variancePlot", width = "100%"),
+                   br(),
+                   br(),
+                   br(),
+                   plotOutput(outputId = "AccuracyPlot", width = "100%")
                    ),
           ),
           
@@ -200,7 +212,7 @@ ui <- list(
           p('Everything is a trade off between accuracy and consistency.
             The more of the data is used for training the more accurate
             (unless oversampling occurs) the estimate. More of the data used for
-            testing you will get a result that more accuratetly measures how good 
+            testing you will get a result that more accuratetly measures how good
             the data algorithm is'),
           p('If the percent correct is very high you may as well just
             go with low training and high testing to make sure you get an accurate result')
@@ -216,26 +228,6 @@ server <- function(input, output, session) {
   observeEvent(input$go1, {
     updateTabItems(session, "tabs", "expl")
   })
-  
-  
-  # Load additional dependencies and setup functions
-  basePerformPlot <- ggplot(
-    data = data.frame(x = seq(from = 0.5, to = 1), y = seq(from = 0, to = 1)),
-    mapping = aes(x = x, y = y)
-  ) +
-    #geom_abline(slope = 1, intercept = 0) +
-    theme_bw() +
-    xlab("Proportion in Training Set") +
-    ylab("The MSOS of the error (so lower the better)") +
-    labs(title = "Your Performance") +
-    theme(
-      text = element_text(size = 18)
-    ) +
-    scale_x_continuous(limits = c(.5, 1), expand = expansion(mult = 0.01, add = 0)) +
-    scale_y_continuous(limits = c(80, 100), expand = expansion(mult = 0.01, add = 0))
-  
-  #100 for categorical sample, .2 for quantitative example
-  
   
   tracking <- reactiveValues()
   tracking$DT <- data.frame(
@@ -272,7 +264,7 @@ server <- function(input, output, session) {
     }
     else if(input$theVariable == "island")
     {
-      minYAxis <-70
+      minYAxis <-65
     }
     else if(input$theVariable == "body_mass_g")
     {
@@ -280,7 +272,7 @@ server <- function(input, output, session) {
     }
     else if(input$theVariable == "sex")
     {
-      minYAxis <-40
+      minYAxis <-50
     }
     else if(input$theVariable == "youtube")
     {
@@ -294,7 +286,7 @@ server <- function(input, output, session) {
     {
       minYAxis <-40
     }
-    else if(input$theVariable == "age")
+    else if(input$theVariable == "trestbps")
     {
       minYAxis <-0
     }
@@ -322,27 +314,27 @@ server <- function(input, output, session) {
     }
     else if(input$theVariable == "body_mass_g")
     {
-      maxYAxis <-8
+      maxYAxis <-110000
     }
     else if(input$theVariable == "sex")
     {
-      maxYAxis <-100
+      maxYAxis <-90
     }
     else if(input$theVariable == "youtube")
     {
-      maxYAxis <-8
+      maxYAxis <-4000
     }
     else if(input$theVariable == "sales")
     {
-      maxYAxis <-8
+      maxYAxis <-20
     }
     else if(input$theVariable == "target")
     {
       maxYAxis <-100
     }
-    else if(input$theVariable == "age")
+    else if(input$theVariable == "trestbps")
     {
-      maxYAxis <-100
+      maxYAxis <-600
     }
     else
     {
@@ -382,10 +374,14 @@ server <- function(input, output, session) {
         "Machine learning algorithm to try and learn the type of penguins"
       })
       output$dataTableVariables <- renderText({
-        "<ul><li>Youtube advertising spent in thousands of dollars</li><li>
-          Facebook advertising spent in thousands of dollars</li><li>
-          Newspaper advertising spent in thousands of dollars</li><li>
-          Total sales made in thousands of units</li><li>"
+        "<ul><li><b>Species: Species of penguin</b></li><li>
+          <b>island: Which island in Palmer Archipelago penguin was found on</b></li><li>
+          bill_length_mm: bill length in milimeters</li><li>
+          bill_depth_mm: bill depth in milimeters</li><li>
+          flipper_length_mm: flipper length in milimeters</li><li>
+          <b>body_mass_g: Total mass of penguin in grams</b></li><li>
+        <b>sex: (Male or Female)</b>"
+        
       })
       updateSelectInput(session, inputId = "theVariable", label = NULL,
                         choices = list('species','island', 'body_mass_g', 'sex'))
@@ -399,13 +395,13 @@ server <- function(input, output, session) {
         "Simple dataset to predict continous values most notably the overall sales"
       })
       output$dataTableVariables <- renderText({
-        "<ul><li>Youtube advertising spent in thousands of dollars</li><li>
-          Facebook advertising spent in thousands of dollars</li><li>
-          Newspaper advertising spent in thousands of dollars</li><li>
-          Total sales made in thousands of units</li><li>"
+        "<ul><li><b>youtube: Youtube advertising spent in thousands of dollars</b></li><li>
+          facebook: Facebook advertising spent in thousands of dollars</li><li>
+          newspaper: Newspaper advertising spent in thousands of dollars</li><li>
+          <b>sales: Total sales made in thousands of units</b>"
       })
       updateSelectInput(session, inputId = "theVariable", label = NULL,
-                        choices = list('sales','youtube'))
+                        choices = list('youtube', 'sales'))
     }
     else if(input$theDataSet == "Heart Disease"){
       dataset <- read.csv("HeartDiseaseData.csv")
@@ -421,21 +417,21 @@ server <- function(input, output, session) {
         "This dataset adds extra challenge with its numerous continuous and categorical variables to be predicted."
       })
       output$dataTableVariables <- renderUI(
-        HTML("<ul><li>Age in years</li><li>cp is chest pain type</li><li>
-             sex (male or female)</li><li>
-             trestbps is resting blood pressure</li><li>
-             chol is serum cholestoral in mg/dl, fasting blood sugar (yes or no)</li><li>
-             restecg resting electrocardiographic results</li><li>
+        HTML("<ul><li>Age: in years</li><li>cp: chest pain type</li><li>
+             <b>sex: male or female</b></li><li>
+             <b>trestbps: resting blood pressure</b></li><li>
+             chol: serum cholestoral in mg/dl, fasting blood sugar (yes or no)</li><li>
+             restecg: resting electrocardiographic results</li><li>
              thalach: maximum heart rate</li><li>
              exang: exercise induced (yes or no)</li><li>
              oldpeak: ST depression induced by exercise relative to rest</li><li>
              Slope: of peak exercise ST segment,</li><li>
              ca: # vessels colored by flourosopy (0-3) </li><li>
              thal: Thalassemia level (blood disorder) the lower the better</li><li>
-             target: heart disease (healthy or unhealthy)</li></ul>")
+             <b>target: heart disease (healthy or unhealthy)</b></li></ul>")
         )
       updateSelectInput(session, inputId = "theVariable", label = NULL,
-                        choices = list('age', 'sex', 'target'))
+                        choices = list('sex', 'trestbps', 'target'))
     }
     else{
       updateSelectInput(session,inputId = "theVariable", lable = NULL,
@@ -491,10 +487,10 @@ server <- function(input, output, session) {
       updateSelectInput(session, inputId = "theMethod", label = NULL,
                         choices = list("Logistic Regression","Linear Discriminant Analysis"))
     }
-    else if(input$theVariable == "age")
+    else if(input$theVariable == "trestbps")
     {
       updateSelectInput(session, inputId = "theMethod", label = NULL,
-                        choices = list("Multiple Linear Regression", "Ridge Regression", "LASSO"))
+                        choices = list("Multiple Linear Regression"))
     }
     else
     {
@@ -528,11 +524,9 @@ server <- function(input, output, session) {
       predictions <- predict(object = fit.lda, newdata = validation)
       finalPredictions <- predictions$class
       outputType <- "categorical"
-      print(finalPredictions)
     }
     else if(method == 'Multiple Linear Regression')
     {
-      print(trainingDataset)
       fit.lm <- lm(eval(parse(text = paste(predictionVariable, '~.'))), data = trainingDataset)
       finalPredictions <- predict(fit.lm, validation)
       outputType <- "continuous" 
@@ -540,8 +534,6 @@ server <- function(input, output, session) {
     else if(method == 'Logistic Regression'){
       fit.lr <- glm(eval(parse(text = paste(predictionVariable, '~.'))), data = trainingDataset, family = "binomial")
       probabilities <- predict(fit.lr, validation, type = "response")
-      print(predictionVariable)
-      #print(probabilities)
       if(predictionVariable ==  "sex")
         finalPredictions <- ifelse(probabilities < 0.5, "female", "male")
       else if(predictionVariable == "target"){
@@ -549,8 +541,6 @@ server <- function(input, output, session) {
       }
       else
         print("")
-        
-      print(finalPredictions)
       #fit.lr <- glm(target ~ ., data = trainingDataset, family = "binomial")
       #probabilities <- predict(fit.lr, validation, type = "response")
       #finalPredictions <- ifelse(probabilities > 0.5, "Unhealthy", "Healthy")
@@ -558,7 +548,6 @@ server <- function(input, output, session) {
     }
     else if(method == "Ridge Regression")
     {
-      #print(trainingDataset)
       #x <- model.matrix( ~ ., trainingDataset)
       
       x <- as.matrix(trainingDataset[, names(trainingDataset) != predictionVariable])
@@ -566,7 +555,6 @@ server <- function(input, output, session) {
 
       fit.glm <- glmnet(x, y, family="gaussian", alpha=0, lambda=0.001)
       finalPredictions <- predict(fit.glm, data.matrix(validation[, names(trainingDataset) != predictionVariable]), type = "response") #type used to = "link"
-      #print(finalPredictions)
       outputType <- "continuous"
     }
     else if(method == "LASSO")
@@ -595,8 +583,6 @@ server <- function(input, output, session) {
     {
       count <- 0
       correct <- 0
-      #print(validation$target)
-      #print(finalPredictions)
       for(word in finalPredictions)
       {
         count <- count + 1
@@ -615,14 +601,9 @@ server <- function(input, output, session) {
       for(number in finalPredictions)
       {
         count <- count + 1
-        #print(number)
-        #print("THIS MARKS START OF NEXT SECTION")
-        #print(eval(parse(text= paste('validation$',predictionVariable,'[',count,']'))))
         MSOS = MSOS + ((number - eval(parse(text= paste('validation$',predictionVariable,'[',count,']'))))^2)
-        #print(MSOS)
       }
       MSOS <- MSOS / count
-      #print(MSOS)
       return(MSOS)
     }
   }
@@ -756,7 +737,6 @@ server <- function(input, output, session) {
      
      newAverages <- list(0,0,0,0,0,0,0,0,0,0)
      totalRuns <- as.numeric(input$repetitions)
-     print(totalRuns)
      count <- 1
      
      #As the probability is being calculated these lists store the values from each test and sort them by percent in training data 
@@ -773,7 +753,6 @@ server <- function(input, output, session) {
      consistency95 <- vector(mode = "list", length = totalRuns)
      
      count <- 1
-     print("FINALLY GOT TO HERE")
      #Each run calculates 1 accuracy for each of the 10 percentages.
      #  It runs as many times as totalRuns and 
      while(count <= totalRuns)
@@ -894,7 +873,7 @@ server <- function(input, output, session) {
     {
       #https://www.youtube.com/watch?v=C4N3_XJJ-jU was important
       dataset <- read.csv("HeartDiseaseData.csv")
-      names(dataset)[names(dataset) == `ï..age`] <- "age"
+      
       #Cleaning
       dataset[dataset == "?"] <- NA
       dataset <- na.omit(dataset)
@@ -938,9 +917,6 @@ server <- function(input, output, session) {
     {
       percentCorrect <- calculateAccuracy(dataset, input$testingPercent, input$theMethod, predictor, predictionVariable)
       percentCorrect <- signif(percentCorrect,4)
-      
-      print(input$testingPercent)
-      print(percentCorrect)
       currentPoints <- data.frame(
         percentTraining = input$testingPercent,
         accuracyValue = percentCorrect
@@ -950,54 +926,26 @@ server <- function(input, output, session) {
       ###---- Store new values ----
       tracking$DT <- rbind(tracking$DT, currentPoints)
     }
-    
-    
   })
   
-  
-  # # Load additional dependencies and setup functions
   basePerformPlot <- ggplot(
-    data = data.frame(x = seq(from = 0.5, to = 1), y = seq(from = 0, to = 1)),
+    data = data.frame(x = seq(from = 0.2, to = 1), y = seq(from = 0, to = 1)),
     mapping = aes(x = x, y = y)
   ) +
-    #geom_abline(slope = 1, intercept = 0) +
     theme_bw() +
     xlab("Proportion in Training Set") +
     ylab("MSOS error") +
-    labs(title = "Your Performance") +
+    labs(title = "The Accuracy of Every Test") +
     theme(
       text = element_text(size = 18)
     ) +
-    scale_x_continuous(limits = c(.5, 1), expand = expansion(mult = 0.01, add = 0)) +
-    scale_y_continuous(limits = c(80, 100), expand = expansion(mult = 0.01, add = 0))
-
-  # #100 for categorical sample, .2 for quantitative example
-  #   basePerformPlot <- ggplot(
-  # data = data.frame(x = seq(from = 0.5, to = 1), y = seq(from = 0, to = 1)),
-  # mapping = aes(x = x, y = y)
-  # ) +
-  # #geom_abline(slope = 1, intercept = 0) +
-  # theme_bw() +
-  # xlab("Proportion in Training Set") +
-  # ylab("MSOS error") +
-  # labs(title = "Your Performance") +
-  # theme(
-  #   text = element_text(size = 18)
-  # ) +
-  # scale_x_continuous(limits = c(.5, 1), expand = expansion(mult = 0.01, add = 0)) +
-  # scale_y_continuous(limits = c(80, 100), expand = expansion(mult = 0.01, add = 0))
-
+    scale_x_continuous(limits = c(.2, 1), expand = expansion(mult = 0.01, add = 0)) +
+    scale_y_continuous(limits = c(100, 550), expand = expansion(mult = 0.01, add = 0))
   
-  output$newAccuracy <- renderPlot({
-    if (is.null(tracking$DT) || nrow(tracking$DT) == 0) {
-      basePerformPlot
-    } 
-    else {
+  output$variancePlot <- renderPlot({
       basePerformPlot +
         scale_y_continuous(limits = c(minYAxis(), maxYAxis(), expand = expansion(mult = 0.01, add = 0))) +
-        
-        #scale_y_continuous(limits = c(minYAxis(), yMax(), expand = expansion(mult = 0.01, add = 0))) +
-        geom_point(
+          geom_point(
           data = tracking$DT,
           mapping = aes(
             x = percentTraining,
@@ -1008,14 +956,55 @@ server <- function(input, output, session) {
         ylab(yLabel()) +
         theme(
           legend.position = "bottom"
-        ) +
-        stat_smooth(method = "lm", formula = y ~ poly(x, 3), size = 1, se = FALSE)
-    }
+        )
+      #geom_errorbar(stat="summary", fun.data="mean_se", fun.args = list(mult = 1.96))
   })
   
+  output$AccuracyPlot <- renderPlot({
+    #Compute the average of the points at each location X
+    subset20 <- mean(subset(tracking$DT, (percentTraining == .2))$accuracyValue)
+    subset25 <- mean(subset(tracking$DT, (percentTraining == .25))$accuracyValue)
+    subset30 <- mean(subset(tracking$DT, (percentTraining == .3))$accuracyValue)
+    subset35 <- mean(subset(tracking$DT, (percentTraining == .35))$accuracyValue)
+    subset40 <- mean(subset(tracking$DT, (percentTraining == .4))$accuracyValue)
+    subset45 <- mean(subset(tracking$DT, (percentTraining == .45))$accuracyValue)
+    subset50 <- mean(subset(tracking$DT, (percentTraining == .5))$accuracyValue)
+    subset55 <- mean(subset(tracking$DT, (percentTraining == .55))$accuracyValue)
+    subset60 <- mean(subset(tracking$DT, (percentTraining == .6))$accuracyValue)
+    subset65 <- mean(subset(tracking$DT, (percentTraining == .65))$accuracyValue)
+    subset70 <- mean(subset(tracking$DT, (percentTraining == .7))$accuracyValue)
+    subset75 <- mean(subset(tracking$DT, (percentTraining == .75))$accuracyValue)
+    subset80 <- mean(subset(tracking$DT, (percentTraining == .8))$accuracyValue)
+    subset85 <- mean(subset(tracking$DT, (percentTraining == .85))$accuracyValue)
+    subset90 <- mean(subset(tracking$DT, (percentTraining == .9))$accuracyValue)
+    subset95 <- mean(subset(tracking$DT, (percentTraining == .95))$accuracyValue)
+    #Put these values into a list along with their corresponding percents in a parellel vector
+    averagesList <- c(subset20, subset25, subset30, subset35, subset40, subset45,
+                     subset50, subset55, subset60, subset65, subset70, subset75,
+                     subset80, subset85, subset90, subset95)
+    percents <- c(.2, .25, .3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95)
+    meanPoints <- data.frame(averagesList, percents)
+    meanPoints <- subset(meanPoints, (averagesList != 'NaN'))
+    ggplot(data = meanPoints, aes(x = percents, y = averagesList)) +
+      geom_point(
+        data = meanPoints,
+        mapping = aes(
+          x = percents,
+          y = averagesList
+        ),
+        size = 4
+      ) +
+      theme_bw() +
+      theme(
+        text = element_text(size = 18),
+      ) +
+      xlab("Proportion in Training Set") +
+      ylab(yLabel()) +
+      labs(title = "The Average Accuracy") +
+      stat_smooth(method = "lm", formula = y ~ poly(x, 1), size = 1, se = FALSE)
+    })
 }
 
-#})
 shinyApp(ui = ui, server = server)
 
 
@@ -1039,7 +1028,6 @@ shinyApp(ui = ui, server = server)
 #   fit.cart <- train(eval(parse(text= paste(predictionVariable,'~.'))), data=trainingDataset, method="rpart", metric=metric, trControl=control)
 #   predictions <- predict(fit.cart, validation)
 #   output$results <- renderText({resamples(fit.cart)})
-
 
 #This outputs the loading bar
 # observeEvent(input$outputGraph,{
